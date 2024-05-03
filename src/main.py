@@ -13,32 +13,15 @@ from enum import Enum
 BLOCK_SIZE = 3
 WIDHT = 3
 HEIGHT = 3
+BLOCK_CNT = WIDHT * HEIGHT
 
 #for random
 SUDOKU_SEED = 100
-RND_SEED = 42
+RND_SEED = 40
 #*****CONSTANST*****
 
-random.seed(RND_SEED) 
+# random.seed(RND_SEED) 
 
-
-# TODO delete
-# puzzle = Sudoku(3,3).difficulty(0.2)
-# # # puzzle.show()
-# print(puzzle)
-# print(puzzle.board)
-# arr = puzzle.board
-# for i in range(len(arr)):
-#     for j in range(len(arr[i])):
-#         if arr[i][j] is None:
-#             arr[i][j] = 0
-# b = arr
-# for i in b:
-#     print(i)
-
-def prettyPrint2d(matrix):
-    for row in matrix:
-        print(row)
 
 def replaceNoneWithZeros(board: List[List[int]]):
     for i in range(len(board)):
@@ -59,6 +42,8 @@ def printBoard(TASK_BOARD):
             print((('| ' + '{} ' * width) * height + '|').format(*[format_int.format(x) if x != 0  else ' ' * cell_length for x in row]))
             if i == width * height - 1 or i % height == height - 1:
                 print(('+-' + '-' * (cell_length + 1) * width) * height + '+')
+
+
 filled_board = [
     [6, 8, 9, 2, 3, 1, 7, 4, 5],
     [2, 5, 1, 4, 6, 7, 9, 3, 8],
@@ -187,23 +172,44 @@ def switch(board: List[List[int]], fst:tuple[int, int], snd:tuple[int, int]):
 
 
 def evalBoard(board: List[List[int]], oneHot: List[List[int]]): # TODO will oneHot be used in eval func?
-    # print("---EVAL---")
     conflictCnt = 0
     rowLen = BLOCK_SIZE * WIDHT
     colLen = BLOCK_SIZE * HEIGHT
-    for r in board:
-        counter = Counter(r)
-        conflictCnt += rowLen - len(counter)
+    if False:
+        for r in board:
+            counter = Counter(r)
+            conflictCnt += rowLen - len(counter)
 
-    # print([board[i][0:colLen] for i in range(0,3)])
-    for colIdx in range(colLen):
-        col = [row[colIdx:colIdx + 1][0] for row in board]
-        counter = Counter(col)
-        conflictCnt += colLen - len(counter)
-        # print(col)
+        for colIdx in range(colLen):
+            col = [row[colIdx:colIdx + 1][0] for row in board]
+            counter = Counter(col)
+            conflictCnt += colLen - len(counter)
+
+        # print("Eval: ", conflictCnt)
+        return conflictCnt
+    CONFLICT_WITH_TASK_CELL_COST = 2
+    for r in range(rowLen): # each row
+        for c in range(colLen - 1): #all but last
+            for second in range(c + 1, colLen): # compare with all following this [r][c] in row
+                if board[r][c] == board[r][second]: #Conflict
+                    if oneHot[r][c] == oneHot[r][second]: # both are movable
+                        conflictCnt += 1
+                    else:
+                        conflictCnt += 1 * CONFLICT_WITH_TASK_CELL_COST
+
+                
+    for c in range(colLen):
+        for r in range(rowLen - 1):
+            for second in range(r + 1, rowLen): # compare with all following this [r][c] in column
+                if board[r][c] == board[second][c]: #Conflict
+                    if oneHot[r][c] == oneHot[second][c]: # both are movable
+                        conflictCnt += 1
+                    else:
+                        conflictCnt += 1 * CONFLICT_WITH_TASK_CELL_COST
 
     # print("Eval: ", conflictCnt)
     return conflictCnt
+    
 
 
 
@@ -212,10 +218,10 @@ def plot(samples: List[int])-> None:
     print("Plotting graph")
     x = list(range(1, len(samples) + 1))
 
-    plt.plot(x, samples, marker='o', linestyle='-')
+    plt.plot(x, samples)
 
     # Add labels and title
-    plt.xlabel('Iteration')
+    plt.xlabel('New best eval')
     plt.ylabel('Evaluaiton')
     plt.title('2D Graph of energy function')
     plt.show()
@@ -224,9 +230,9 @@ def plot(samples: List[int])-> None:
 def tempChange(temp:float):
     # Linear
     # newTemp = temp - TEMP_LOSS
+    # return newTemp if (newTemp > 0) else 0
 
-    newTemp = temp * TEMP_LOSS
-    return newTemp if (newTemp > 0) else 0
+    return temp * TEMP_LOSS
 
 
 
@@ -244,97 +250,118 @@ class SAReturn(Enum):
     STUCK = 2
     MAX_ITER = 3
     
-
+TEMP_LOW_THR = 1e-3
+VERBOSE = False
 
 #**** SA alg ******
 def SAsudoku (task_board: List[List[int]], ITER:int, temp)-> tuple[List[List[int]], List[int], bool]:
     # fill board with numbers
     board, oneHot = createSolutionBoard(task_board)
+    if VERBOSE:
+        print("Filling cells:")
+        printBoard(board)
 
     bestScore = evalBoard(board, oneHot)
     scores = [bestScore]
+    stuckCnt = 0
     #start SA
     for i in range(ITER):
         foundStep = False
-        blocksSearched = []
-        while not foundStep:
-            #select random block that was not yet searched in this step
-            blockIdx = random.choice([num for num in range(0, BLOCK_CNT) if num not in blocksSearched])
-            # printBoard(oneHot)
-            movableCnt, movableIdx = movable(oneHot) #todo movableCnt            
-            movables = movableIdx[blockIdx]
-            # keep randomly selecting movables until all were searched
-            while len(movables) > 1:
-                m = random.choice(movables)
-                movables.remove(m)
-                neighbour = random.choice(movables)
-                switch(board, m, neighbour)
-                eval = evalBoard(board, oneHot)
-                if eval < bestScore: #best score
-                    foundStep = True
-                else:
-                    diff = -float(eval - bestScore)
-                    c = np.exp((diff)/(temp))
-                    rnd = random.random()
-                    if c > rnd: 
-                        # print("Selected with Temp ", c, rnd)
-                        foundStep = True
 
-                if foundStep:# found step, exit searching
-                    scores.append(eval)
-                    if eval < bestScore:
-                        print(f"{i:3d}.new best score: {eval:3d}")
-                        bestScore = eval
-                    break
+        #select random block that was not yet searched in this step
+        blockIdx = random.choice([num for num in range(0, BLOCK_CNT)])
+        # printBoard(oneHot)
+        movableCnt, movableIdx = movable(oneHot) #todo movableCnt            
+        movables = movableIdx[blockIdx]
+        if len(movables) <= 1: # only one movable in block
+            i -= 1
+            continue
 
-                switch(board, m, neighbour)
-            
-            temp = tempChange(temp) #update temperutre
-            if foundStep:   # found step
-                # print("Found step")
-                if scores[-1] == GOAL: # hit GOAL
-                    return board, scores, bestScore, SAReturn.REACHED_GOAL
-                
-            # did not find step in this block
-            elif len(movables) <= 1:            
-                # print("could not find")
-                blocksSearched.append(blockIdx)
-                if(len(blocksSearched) == BLOCK_CNT):
-                    print(f"{i:3d} GOT STUCK!")
-                    return board, scores, bestScore, SAReturn.STUCK
-                    
+        m = random.choice(movables)
+        movables.remove(m)
+        neighbour = random.choice(movables)
+        switch(board, m, neighbour)
+        eval = evalBoard(board, oneHot)
+        if eval <= bestScore: #best score
+            foundStep = True
+        else:
+            diff = -float(eval - bestScore)
+            c = np.exp((diff)/(temp))
+            rnd = random.random()
+            if c > rnd: 
+                # print("Selected with Temp ", c, rnd)
+                foundStep = True
+
+        temp = tempChange(temp) #update temperutre
+        if foundStep:# found step, exit searching
+            # if eval != scores[-1]: # TODO delete
+            scores.append(eval)
+            if eval < bestScore:
+                if VERBOSE:
+                    print(f"{i:3d}.new best score: {eval:3d}")
+                bestScore = eval
+            if scores[-1] == GOAL: # hit GOAL
+                print(f"{i:3d}.Found goal")
+                return board, scores, bestScore, SAReturn.REACHED_GOAL
+            continue
+
+        # did not find solution
+        switch(board, m, neighbour)
+        if temp <= TEMP_LOW_THR:
+            if VERBOSE:
+                print("Small temp:", temp, "  reheating")
+            temp = 0.6 # TODO
+
+        stuckCnt += 1
+        if stuckCnt == 10000: # TODO
+            if VERBOSE:
+                print("Stuck, restarting..")
+            board, oneHot = createSolutionBoard(task_board)
+            # print("Filling cells:")
+            # printBoard(board)
+
+            bestScore = evalBoard(board, oneHot)
+            scores = [bestScore]
+            temp = 0.2 # TODO
+            stuckCnt = 0
+        
+                            
+    print(temp)       
     print("Reached maximum number of Iterations:", ITER)
     return board, scores, bestScore, SAReturn.MAX_ITER
 
 ######RUN########
 GENERATE_BOARD = True
-DIFFICULTY = 0.3
+DIFFICULTY = 0.5
 task_board = easy_board 
 if GENERATE_BOARD:
     task_board = Sudoku(3,3).difficulty(DIFFICULTY).board    
 replaceNoneWithZeros(task_board)
 
 
+ITER = 50000
+temp = 0.4
+GOAL = 0 # goal is to have eval == 0
+TEMP_LOSS = 0.999
+
+
 print("Solving sudoku:")
 printBoard(task_board)
-
-ITER = 1000
-temp = 5
-GOAL = 0 # goal is to have eval == 0
-BLOCK_CNT = 9
-TEMP_LOSS = 0.95
-
 
 board, scores, bestScore, foundSolution = SAsudoku(task_board,  ITER, temp)
 
 match foundSolution:
     case SAReturn.REACHED_GOAL:    
         print("Goal reached! showing solution") # todo
-        printBoard(board)
+        # printBoard(board)
     case SAReturn.MAX_ITER:
         print("Goal not reached due to max iterations:", ITER) 
+        print("Final Eval:", scores[-1]) 
     case SAReturn.STUCK:
         print("Goal not reached due beeing stuck") 
         printBoard(board)
-# plot(scores)
+
+
+printBoard(board)
+plot(scores)
 exit(0)
