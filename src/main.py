@@ -2,16 +2,14 @@ from sudoku import Sudoku
 import random
 import numpy as np
 from typing import List
-import sys
-from collections import Counter
 import matplotlib.pyplot as plt
-from enum import Enum
 import os
+import time
 
 
 #*****CONSTANST*****
 # for program
-MAX_STUCK_COUNT = 1000
+MAX_STUCK_COUNT = 100000
 TASK_ONE_HOT = 1
 BOARD_ONE_HOT = 0
 VERBOSE = False
@@ -27,11 +25,11 @@ DIFFICULTY = 0.5
 WIDTH = 3
 HEIGHT= 3
 ITER = 5000
-CONFLICT_WITH_TASK_CELL_COST = 5
-TEMP_INITIAL = 6
-TEMP_LOSS = 0.95
-TEMP_REHEAT = 2
-TEMP_LOW_THR = 0.5
+CONFLICT_WITH_TASK_CELL_COST = 100
+TEMP_INITIAL = 3
+TEMP_LOSS = 0.01
+TEMP_REHEAT = TEMP_INITIAL / 16
+TEMP_LOW_THR = 0.01
 
 
 #for random
@@ -163,7 +161,7 @@ def evalBoard(board: np.ndarray, taskBoard: np.ndarray):
 
 
 
-
+# plot one sudoku iter x eval graph
 def plot(samples: List[int])-> None:
     print("SA-sudoku example")
     x = list(range(1, len(samples) + 1))
@@ -178,12 +176,10 @@ def plot(samples: List[int])-> None:
 
 
 def tempChange(temp:float, coolingType):
-    global COOLING_LINEAR
-    global COOLING_GEOMETRIC
     match coolingType:
         case 0:
             new = temp - TEMP_LOSS
-            if (new < 0):
+            if (new <= 0):
                 new = 0.002
             return new
         case 1:
@@ -215,14 +211,6 @@ def SAsudoku (taskBoard: np.ndarray, ITER:int, temp, COOLING_TYPE)-> tuple[np.nd
         print("Filling cells:")
         printBoard(board)
     reheat = TEMP_REHEAT
-    print('Task:')
-    printBoard(taskBoard)
-    print('OneHot:')
-    printBoard(oneHot)
-    print('Board:')
-    printBoard(board)
-    print('Board:')
-    printBoard(board)
 
     bestScore = evalBoard(board, taskBoard)
     scores = [bestScore]
@@ -312,74 +300,85 @@ TEST_COUNT = {testCnt}
 
 def runSAsudoku(testCount, COOLING_TYPE) -> tuple[List[int]]:
     # puzzle = Sudoku(WIDTH,HEIGHT, seed=SEED).difficulty(DIFFICULTY)
-    puzzle = Sudoku(WIDTH,HEIGHT).difficulty(DIFFICULTY)
-    replaceNoneWithZeros(puzzle.board)
-    taskBoard = np.array(puzzle.board)
-    temp = TEMP_INITIAL
     
     iterations = []
-    for i in range(1):
+    didntFindSolution = testCount
+    for i in range(testCount):
+        puzzle = Sudoku(WIDTH,HEIGHT).difficulty(DIFFICULTY)
+        replaceNoneWithZeros(puzzle.board)
+        taskBoard = np.array(puzzle.board)
+        temp = TEMP_INITIAL
         _, scores, foundSolution = SAsudoku(taskBoard,  ITER, temp, COOLING_TYPE)
-        print(scores[-1])
-        plot(scores)
         iterations.append(len(scores))
         if i != 0 and ((i % 10) == 0):
             print("  ",i)
         if i == testCount - 1:
             print("  ",i + 1)
+        if i == 0:
+            printBoard(taskBoard)
+        if foundSolution:
+            didntFindSolution -= 1
 
+    print("    didnt find solutions:", didntFindSolution)
     return iterations
 
-dataFolder = 'dataFolder'
-if not os.path.exists(dataFolder):
-    os.makedirs(dataFolder)
 
-configFolder = 'SAoneExample'
-if not os.path.exists(os.path.join(dataFolder, configFolder)):
-    os.makedirs(os.path.join(dataFolder, configFolder))
-configFolderPath = os.path.join(dataFolder, configFolder)
 
 def main():
-    COOLING_TYPE = COOLING_GEOMETRIC
+    COOLING_TYPE = COOLING_LINEAR
     # SEED = random.randint(1, 10000)
     # random.seed(SEED)
     # np.random.seed(SEED)
 
 
-    configName = 'constants'
-    configValues = list(range(1))
+    configName = 'DIFFICULTY'
+    configValues = list([0.3,0.4,0.5,0.6,0.7,0.8, 0.9, 0.95])
+    global WIDTH
+    global HEIGHT
+    WIDTH = 4
+    HEIGHT = 4
     configCnt = len(configValues)
     results = []
     testCount = 30
-    print("Config values      :", configCnt)
+    print("Config             :", configName)
+    print("Config values      :", configValues)
     print("Test count per conf:", testCount)
+    textSize = '' + str(HEIGHT) + 'x' + str(WIDTH) + '_4'
+    plotTitle = 'Size Comparison ' + textSize
     for i in range(configCnt):
-        print(i,": running ")
+        print(i,":", configValues[i], " running ")
         globals()[configName] = configValues[i]
-        x = configValues[i]
+        start_time = time.time()
         results.append(runSAsudoku(testCount, COOLING_TYPE))
+        print("time:", time.time() - start_time)
+    
     
     
 
-    plt.figure(configName)
+    plt.figure(plotTitle)
+    plt.title(plotTitle)
     plt.boxplot(results)
 
     # Set labels and title
-    plt.xlabel('Value')
+    plt.xlabel(configName)
     plt.ylabel('Iteration')
-    plt.title(configName)
+    plt.xticks(range(1, len(configValues) + 1), configValues)
 
+    dataFolder = 'data'
+    if not os.path.exists(dataFolder):
+        os.makedirs(dataFolder)
 
-
+    configFolder = configName + textSize
+    if not os.path.exists(os.path.join(dataFolder, configFolder)):
+        os.makedirs(os.path.join(dataFolder, configFolder))
+    configFolderPath = os.path.join(dataFolder, configFolder)
     # Save the plot to a file in the subfolder
     plt.savefig(os.path.join(configFolderPath, configName + '.png'))
     text_file = os.path.join(configFolderPath, configName +'.txt')
     with open(text_file, 'w') as f:
         f.write(getConfigString(COOLING_TYPE, testCount))
     # Show the plot
-    # plt.show()
-    print(getConfigString(COOLING_TYPE, testCount))
-    
+    plt.show()    
     return
 
 main()

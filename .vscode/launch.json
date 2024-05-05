@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File (venv)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "env": {},
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "stopOnEntry": false
+        }
+    ]
+}
