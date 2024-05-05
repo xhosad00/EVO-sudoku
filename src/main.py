@@ -11,34 +11,29 @@ import os
 
 #*****CONSTANST*****
 # for program
-BLOCK_SIZE = 3
-PRINT_DECIMAL_LEN = 1
-CONFLICT_WITH_TASK_CELL_COST = 3
-MAX_STUCK_COUNT = 10000
+MAX_STUCK_COUNT = 1000
 TASK_ONE_HOT = 1
 BOARD_ONE_HOT = 0
 VERBOSE = False
 COOLING_LINEAR = 0
 COOLING_GEOMETRIC = 1
+GOAL = 0 # goal is to have eval == 0
 
 #for random
 RND_SEED = 40
 #*****CONSTANST*****
 
 #****GLOBAL VARIABLes***
-WIDTH = 3
-HEIGHT = 3
-
 ######RUN########
 DIFFICULTY = 0.4
-WIDTH = 2
-HEIGHT= 3
-TEMP_LOSS = 0.99
-TEMP_INITIAL = 4
-TEMP_REHEAT = 1
+WIDTH = 4
+HEIGHT= 4
+ITER = 5000
+CONFLICT_WITH_TASK_CELL_COST = 10
+TEMP_INITIAL = 5
+TEMP_LOSS = 0.9
+TEMP_REHEAT = 2
 TEMP_LOW_THR = 0.5
-GOAL = 0 # goal is to have eval == 0
-ITER = 1000
 # random.seed(RND_SEED) 
 # np.random.seed(RND_SEED)
 
@@ -201,7 +196,7 @@ def tempChange(temp:float, coolingType):
 def arrayConflicts(boardRow: np.ndarray, taskRow: np.ndarray) -> int:
     # board X task conflicts
     z = np.isin(boardRow, taskRow) # if board element is in task row
-    taskConflicts = z.sum().item() * 2
+    taskConflicts = z.sum().item() * CONFLICT_WITH_TASK_CELL_COST
 
     # board conflicts
     unique = np.unique(boardRow)
@@ -210,7 +205,7 @@ def arrayConflicts(boardRow: np.ndarray, taskRow: np.ndarray) -> int:
     return taskConflicts + boardConflicts
 
 #**** SA alg ******
-def SAsudoku (taskBoard: np.ndarray, ITER:int, temp, COOLING_TYPE)-> tuple[List[List[int]], List[int], bool]:
+def SAsudoku (taskBoard: np.ndarray, ITER:int, temp, COOLING_TYPE)-> tuple[np.ndarray, List[int], bool]:
     # fill board with numbers
     board, oneHot = createSolutionBoard(taskBoard)
     boardSize = HEIGHT * WIDTH
@@ -223,9 +218,8 @@ def SAsudoku (taskBoard: np.ndarray, ITER:int, temp, COOLING_TYPE)-> tuple[List[
     scores = [bestScore]
     stuckCnt = 0
     movableBlockIdx, movableElementIdx = movable(oneHot) #todo movableCnt
-    movableBlockCnt = len(movableBlockIdx)
+
     #start SA
-    # for i in range(ITER):
     for i in range(ITER):
         foundStep = False
 
@@ -259,7 +253,7 @@ def SAsudoku (taskBoard: np.ndarray, ITER:int, temp, COOLING_TYPE)-> tuple[List[
                 scores.append(bestScore)
                 if VERBOSE:
                     print(f"{i:3d}.Found goal")
-                return board, scores, bestScore, True
+                return board, scores, True
             continue
 
         #append to scores
@@ -276,68 +270,100 @@ def SAsudoku (taskBoard: np.ndarray, ITER:int, temp, COOLING_TYPE)-> tuple[List[
 
         stuckCnt += 1
         if stuckCnt == MAX_STUCK_COUNT: # TODO
-            # if VERBOSE:
-            print("Stuck, restarting with added heat..")
+            if VERBOSE:
+                print("Stuck, restarting with added heat..")
             reheat += reheat
             if (reheat > TEMP_INITIAL):
                 reheat = TEMP_INITIAL / 2
             temp = reheat
             stuckCnt = 0
         
-                            
-    print(temp)       
-    print("Reached maximum number of Iterations:", ITER)
-    return board, scores, bestScore, False
+    if VERBOSE:                            
+        print(temp)       
+        print("Reached maximum number of Iterations:", ITER)
+    return board, scores, False
 
+def getConfigString(COOLING_TYPE, testCnt):
+    colling = 'Linear' if COOLING_TYPE == 0 else 'Geometric'
+    configString = f'''DIFFICULTY = {DIFFICULTY}
+WIDTH = {WIDTH}
+HEIGHT = {HEIGHT}
+ITER = {ITER}
+CONFLICT_WITH_TASK_CELL_COST = {CONFLICT_WITH_TASK_CELL_COST}
+COOLING_TYPE = {colling}
+TEMP_INITIAL = {TEMP_INITIAL}
+TEMP_LOSS = {TEMP_LOSS}
+TEMP_REHEAT = {TEMP_REHEAT}
+TEMP_LOW_THR = {TEMP_LOW_THR}
+TEST_COUNT = {testCnt}
+'''
+    return configString
 
-def main():
-    COOLING_TYPE = COOLING_GEOMETRIC
-    SEED = random.randint(1, 10000)
-    random.seed(SEED)
-    np.random.seed(SEED)
-    puzzle = Sudoku(WIDTH,HEIGHT, seed=SEED).difficulty(DIFFICULTY)
-    puzzle.show()
+def runSAsudoku(testCount, COOLING_TYPE) -> tuple[List[int]]:
+    # puzzle = Sudoku(WIDTH,HEIGHT, seed=SEED).difficulty(DIFFICULTY)
+    puzzle = Sudoku(WIDTH,HEIGHT).difficulty(DIFFICULTY)
     replaceNoneWithZeros(puzzle.board)
     taskBoard = np.array(puzzle.board)
     temp = TEMP_INITIAL
-
-    if VERBOSE:
-        print("Solving sudoku with seed:", SEED)
-        printBoard(taskBoard)
-
-    board, scores, bestScore, foundSolution = SAsudoku(taskBoard,  ITER, temp, COOLING_TYPE)
-
-    testCount = 0
-    results = []
-    for i in range(testCount):
-        board, scores, bestScore, foundSolution = SAsudoku(taskBoard,  ITER, temp, COOLING_TYPE)
-        results.append([scores, bestScore, foundSolution])
-    # print(results)
-
+    
     iterations = []
     for i in range(testCount):
-        iter = len(results[i][0])
-        iterations.append(iter)
-        # iterations.append(results[i][0])
+        _, scores, foundSolution = SAsudoku(taskBoard,  ITER, temp, COOLING_TYPE)
+        iterations.append(len(scores))
+        if i != 0 and ((i % 10) == 0):
+            print("  ",i)
+        if i == testCount - 1:
+            print("  ",i + 1)
 
-    colors = [(0, 0, 1), (0, 1, 0)]
+    return iterations
 
-    plt.figure("IterationBoxplot")
-    plt.boxplot([iterations, iterations], patch_artist=True, boxprops=dict(color=colors))
+def main():
+    COOLING_TYPE = COOLING_GEOMETRIC
+    # SEED = random.randint(1, 10000)
+    # random.seed(SEED)
+    # np.random.seed(SEED)
+
+
+    configName = 'constants'
+    configValues = list(range(2))
+    configCnt = len(configValues)
+    results = []
+    testCount = 30
+    print("Config values      :", configCnt)
+    print("Test count per conf:", testCount)
+    for i in range(configCnt):
+        print(i,": running ")
+        globals()[configName] = configValues[i]
+        x = configValues[i]
+        results.append(runSAsudoku(testCount, COOLING_TYPE))
+    
+    dataFolder = 'dataFolder'
+    if not os.path.exists(dataFolder):
+        os.makedirs(dataFolder)
+
+    configFolder = 'constants'
+    if not os.path.exists(os.path.join(dataFolder, configFolder)):
+        os.makedirs(os.path.join(dataFolder, configFolder))
+    configFolderPath = os.path.join(dataFolder, configFolder)
+
+    plt.figure(configName)
+    plt.boxplot(results)
 
     # Set labels and title
     plt.xlabel('Value')
     plt.ylabel('Iteration')
-    plt.title('Boxplot of Iterations')
+    plt.title(configName)
 
-    subfolder = 'plots'
-    if not os.path.exists(subfolder):
-        os.makedirs(subfolder)
+
 
     # Save the plot to a file in the subfolder
-    plt.savefig(os.path.join(subfolder, 'boxplot.png'))
+    plt.savefig(os.path.join(configFolderPath, configName + '.png'))
+    text_file = os.path.join(configFolderPath, configName +'.txt')
+    with open(text_file, 'w') as f:
+        f.write(getConfigString(COOLING_TYPE, testCount))
     # Show the plot
-    # plt.show()
+    plt.show()
+    print(getConfigString(COOLING_TYPE, testCount))
     
     return
 
