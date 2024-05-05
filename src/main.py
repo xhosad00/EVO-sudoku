@@ -19,21 +19,23 @@ COOLING_LINEAR = 0
 COOLING_GEOMETRIC = 1
 GOAL = 0 # goal is to have eval == 0
 
-#for random
-RND_SEED = 40
 #*****CONSTANST*****
 
 #****GLOBAL VARIABLes***
 ######RUN########
-DIFFICULTY = 0.4
-WIDTH = 4
-HEIGHT= 4
+DIFFICULTY = 0.5
+WIDTH = 3
+HEIGHT= 3
 ITER = 5000
-CONFLICT_WITH_TASK_CELL_COST = 10
-TEMP_INITIAL = 5
-TEMP_LOSS = 0.9
+CONFLICT_WITH_TASK_CELL_COST = 5
+TEMP_INITIAL = 6
+TEMP_LOSS = 0.95
 TEMP_REHEAT = 2
 TEMP_LOW_THR = 0.5
+
+
+#for random
+# RND_SEED = 40
 # random.seed(RND_SEED) 
 # np.random.seed(RND_SEED)
 
@@ -163,15 +165,15 @@ def evalBoard(board: np.ndarray, taskBoard: np.ndarray):
 
 
 def plot(samples: List[int])-> None:
-    print("Plotting graph")
+    print("SA-sudoku example")
     x = list(range(1, len(samples) + 1))
 
     plt.plot(x, samples)
 
     # Add labels and title
-    plt.xlabel('New best eval')
-    plt.ylabel('Evaluaiton')
-    plt.title('2D Graph of energy function')
+    plt.xlabel('Iteration')
+    plt.ylabel('Ohodnocení')
+    plt.title('SA-sudoku example')
     plt.show()
 
 
@@ -213,6 +215,14 @@ def SAsudoku (taskBoard: np.ndarray, ITER:int, temp, COOLING_TYPE)-> tuple[np.nd
         print("Filling cells:")
         printBoard(board)
     reheat = TEMP_REHEAT
+    print('Task:')
+    printBoard(taskBoard)
+    print('OneHot:')
+    printBoard(oneHot)
+    print('Board:')
+    printBoard(board)
+    print('Board:')
+    printBoard(board)
 
     bestScore = evalBoard(board, taskBoard)
     scores = [bestScore]
@@ -281,6 +291,7 @@ def SAsudoku (taskBoard: np.ndarray, ITER:int, temp, COOLING_TYPE)-> tuple[np.nd
     if VERBOSE:                            
         print(temp)       
         print("Reached maximum number of Iterations:", ITER)
+
     return board, scores, False
 
 def getConfigString(COOLING_TYPE, testCnt):
@@ -307,8 +318,10 @@ def runSAsudoku(testCount, COOLING_TYPE) -> tuple[List[int]]:
     temp = TEMP_INITIAL
     
     iterations = []
-    for i in range(testCount):
+    for i in range(1):
         _, scores, foundSolution = SAsudoku(taskBoard,  ITER, temp, COOLING_TYPE)
+        print(scores[-1])
+        plot(scores)
         iterations.append(len(scores))
         if i != 0 and ((i % 10) == 0):
             print("  ",i)
@@ -316,6 +329,15 @@ def runSAsudoku(testCount, COOLING_TYPE) -> tuple[List[int]]:
             print("  ",i + 1)
 
     return iterations
+
+dataFolder = 'dataFolder'
+if not os.path.exists(dataFolder):
+    os.makedirs(dataFolder)
+
+configFolder = 'SAoneExample'
+if not os.path.exists(os.path.join(dataFolder, configFolder)):
+    os.makedirs(os.path.join(dataFolder, configFolder))
+configFolderPath = os.path.join(dataFolder, configFolder)
 
 def main():
     COOLING_TYPE = COOLING_GEOMETRIC
@@ -325,7 +347,7 @@ def main():
 
 
     configName = 'constants'
-    configValues = list(range(2))
+    configValues = list(range(1))
     configCnt = len(configValues)
     results = []
     testCount = 30
@@ -337,14 +359,7 @@ def main():
         x = configValues[i]
         results.append(runSAsudoku(testCount, COOLING_TYPE))
     
-    dataFolder = 'dataFolder'
-    if not os.path.exists(dataFolder):
-        os.makedirs(dataFolder)
-
-    configFolder = 'constants'
-    if not os.path.exists(os.path.join(dataFolder, configFolder)):
-        os.makedirs(os.path.join(dataFolder, configFolder))
-    configFolderPath = os.path.join(dataFolder, configFolder)
+    
 
     plt.figure(configName)
     plt.boxplot(results)
@@ -362,7 +377,7 @@ def main():
     with open(text_file, 'w') as f:
         f.write(getConfigString(COOLING_TYPE, testCount))
     # Show the plot
-    plt.show()
+    # plt.show()
     print(getConfigString(COOLING_TYPE, testCount))
     
     return
